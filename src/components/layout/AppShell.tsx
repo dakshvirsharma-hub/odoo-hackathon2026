@@ -71,6 +71,7 @@ export default function AppShell({ children }: AppShellProps) {
     { label: "Stock / Products", href: "/products", icon: Boxes },
     { label: "Move History", href: "/history", icon: History },
     { label: "Settings", href: "/settings", icon: Settings },
+    { label: "Sign In / Switch", href: "/login", icon: LogIn },
   ];
 
   return (
@@ -199,11 +200,26 @@ export default function AppShell({ children }: AppShellProps) {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Quick Action Badges */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+          <div className="flex items-center gap-3">
+            {/* Direct Sign In / Log In Buttons */}
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs"
+            >
+              <LogIn className="w-3.5 h-3.5" /> Sign In / Log In
+            </Link>
+
+            <Link
+              href="/signup"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold transition-all shadow-xs"
+            >
+              <UserCheck className="w-3.5 h-3.5" /> Register
+            </Link>
+
+            {/* Live Sync Badge */}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Live Sync (SQLite Engine)
+              Live Sync (SQLite)
             </div>
 
             {/* Notifications */}

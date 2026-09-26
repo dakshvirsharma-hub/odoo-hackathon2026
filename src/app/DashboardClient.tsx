@@ -15,6 +15,8 @@ import {
   ExternalLink,
   Plus,
   RefreshCw,
+  LogIn,
+  UserCheck,
 } from "lucide-react";
 
 interface DashboardData {
@@ -93,6 +95,18 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm shadow-indigo-600/30 transition-all"
+            >
+              <LogIn className="w-3.5 h-3.5" /> Sign In / Log In
+            </Link>
+            <Link
+              href="/signup"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-xs transition-colors"
+            >
+              <UserCheck className="w-3.5 h-3.5" /> Register
+            </Link>
             <button
               onClick={fetchDashboardData}
               disabled={isLoading}
