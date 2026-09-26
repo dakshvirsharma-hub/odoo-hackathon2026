@@ -83,8 +83,36 @@ export async function POST(req: NextRequest) {
       validated.type
     );
 
+    // Resolve default locations based on operation type if omitted
+    let sourceLocId = validated.sourceLocationId;
+    let destLocId = validated.destLocationId;
+
+    if (!sourceLocId || !destLocId) {
+      const defaultInternal = await prisma.location.findFirst({ where: { type: "INTERNAL" } });
+      const defaultVendor = await prisma.location.findFirst({ where: { type: "VENDOR" } });
+      const defaultCustomer = await prisma.location.findFirst({ where: { type: "CUSTOMER" } });
+      const defaultLoss = await prisma.location.findFirst({ where: { type: "INVENTORY_LOSS" } });
+
+      if (validated.type === "RECEIPT") {
+        sourceLocId = sourceLocId || defaultVendor?.id;
+        destLocId = destLocId || defaultInternal?.id;
+      } else if (validated.type === "DELIVERY") {
+        sourceLocId = sourceLocId || defaultInternal?.id;
+        destLocId = destLocId || defaultCustomer?.id;
+      } else if (validated.type === "ADJUSTMENT") {
+        sourceLocId = sourceLocId || defaultInternal?.id;
+        destLocId = destLocId || defaultLoss?.id;
+      } else {
+        sourceLocId = sourceLocId || defaultInternal?.id;
+        const secondLoc = await prisma.location.findFirst({
+          where: { type: "INTERNAL", id: { not: sourceLocId } },
+        });
+        destLocId = destLocId || secondLoc?.id || defaultInternal?.id;
+      }
+    }
+
     // Default status: Draft
-    const newOperation = await prisma.$transaction(async (tx) => {
+    const newOperation = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const op = await tx.stockOperation.create({
         data: {
           reference,
@@ -93,8 +121,8 @@ export async function POST(req: NextRequest) {
           contact: validated.contact || (validated.type === "RECEIPT" ? "Vendor" : "Customer"),
           scheduleDate: validated.scheduleDate ? new Date(validated.scheduleDate) : new Date(),
           responsibleName: validated.responsibleName || "Dakshvir Sharma",
-          sourceLocationId: validated.sourceLocationId,
-          destLocationId: validated.destLocationId,
+          sourceLocationId: sourceLocId,
+          destLocationId: destLocId,
           notes: validated.notes,
         },
       });
@@ -103,12 +131,12 @@ export async function POST(req: NextRequest) {
       for (const line of validated.lines) {
         let isOutOfStock = false;
 
-        if (validated.type === "DELIVERY" && validated.sourceLocationId) {
+        if (validated.type === "DELIVERY" && sourceLocId) {
           const stock = await tx.stockLevel.findUnique({
             where: {
               productId_locationId: {
                 productId: line.productId,
-                locationId: validated.sourceLocationId,
+                locationId: sourceLocId,
               },
             },
           });
