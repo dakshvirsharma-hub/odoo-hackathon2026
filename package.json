@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && tsx prisma/seed.ts && next build",
+    "build": "DATABASE_URL=\"file:./dev.db\" prisma generate && DATABASE_URL=\"file:./dev.db\" prisma db push && DATABASE_URL=\"file:./dev.db\" tsx prisma/seed.ts && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
+    "postinstall": "DATABASE_URL=\"file:./dev.db\" prisma generate",
     "seed": "tsx prisma/seed.ts",
     "test": "tsx scripts/smoke-test.ts"
   },
