@@ -1,36 +1,142 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StockSense IMS — Modular Inventory Management System
+> **Odoo x LPU Jalandhar Hackathon 2026 Submission**  
+> **Team Lead**: Dakshvir Sharma (`dakshvirsharma-hub`)  
+> **Evaluator Collaborator**: K Theja (`kthe-odoo`, `kthe@odoo.com`)  
+> **Repository**: [https://github.com/dakshvirsharma-hub/odoo-hackathon2026](https://github.com/dakshvirsharma-hub/odoo-hackathon2026)
 
-## Getting Started
+---
 
-First, run the development server:
+## 🌟 Executive Summary
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**StockSense** is a high-performance, modular Inventory Management System (IMS) engineered to replace fragile paper registers and spreadsheets with real-time, double-entry stock digitization. Built on Next.js 15, Prisma, and SQLite, it models stock transfers as balanced movements between physical locations (`WH/Stock1`, `WH/Production`) and virtual counterparties (`Partner/Vendors`, `Partner/Customers`, `Virtual/Scrap`).
+
+---
+
+## 🏗️ System Architecture & Data Flow
+
+```mermaid
+graph TD
+    subgraph UI ["Client Layer (Next.js 15 + Tailwind CSS)"]
+        Dashboard["Executive Dashboard & KPIs"]
+        OpsView["Operations Control (List / Kanban)"]
+        StockTable["Stock & Products Table"]
+        MoveLedger["Immutable Audit Ledger (Green/Red)"]
+    end
+
+    subgraph API ["REST API Layer (/api)"]
+        DashboardAPI["/api/dashboard"]
+        OpsAPI["/api/operations & /api/operations/[id]"]
+        ProdAPI["/api/products (CRUD & Adjustments)"]
+        LedgerAPI["/api/ledger"]
+        SearchAPI["/api/search (Spotlight Query)"]
+    end
+
+    subgraph Engine ["Core Stock Engine (ACID Transactions)"]
+        StockEngine["src/lib/stock-engine.ts"]
+        RefGen["Sequential Ref Generator (WH/IN/xxxx)"]
+        ShortageGuard["Stock Availability & Shortage Guard"]
+    end
+
+    subgraph DB ["Prisma ORM & SQLite Engine"]
+        UserTable[("User")]
+        WarehouseTable[("Warehouse & Location")]
+        ProductTable[("Product & StockLevel")]
+        OpsTable[("StockOperation & LineItems")]
+        LedgerTable[("StockMoveLedger (Immutable)")]
+    end
+
+    UI --> API
+    API --> Engine
+    Engine --> DB
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ⚙️ Core Engineering Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Double-Entry Inventory Accounting (The Odoo Way)**:
+   - **Receipt (`IN`)**: Stock moves from `Partner/Vendors` $\rightarrow$ `WH/Stock1` (+Stock).
+   - **Delivery (`OUT`)**: Stock moves from `WH/Stock1` $\rightarrow$ `Partner/Customers` (-Stock).
+   - **Internal Transfer**: Stock moves between internal racks (`WH/Stock1` $\rightarrow$ `WH/Production`).
+   - **Adjustment**: Discrepancies between physical counts and system balances are reconciled against `Virtual/Scrap`.
+2. **Shortage Protection & Waiting Queue**:
+   - Deliveries verify `Free to Use` stock (`onHand - reserved`) before validation. If inventory is insufficient, the system marks the line item red, transitions the order to `WAITING`, and halts dispatch.
+3. **Dual List & Kanban Views**:
+   - Operations and Move History screens support one-click switching between tabular data grids and status-grouped Kanban cards (`Draft`, `Waiting`, `Ready`, `Done`).
+4. **Spotlight Search**:
+   - Universal search endpoint querying products, operations, contacts, and warehouse locations in parallel.
+5. **Color-Coded Move History**:
+   - Incoming movements tagged in **Green (`+Qty`)** and outgoing movements tagged in **Red (`-Qty`)**.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## ⚡ 60-Second Quick Start (For Evaluators)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 1. Clone & Install Dependencies
+```bash
+git clone https://github.com/dakshvirsharma-hub/odoo-hackathon2026.git
+cd odoo-hackathon2026
+npm install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 2. Initialize Database & Realistic Seed Data
+```bash
+npx prisma db push
+npm run seed
+```
+*Seeds 14 realistic products (Desks, Tables, Chairs, Steel Rods, Screws), 2 warehouses, 6 locations, and historical documents.*
 
-## Deploy on Vercel
+### 3. Run Automated Smoke Test Suite
+```bash
+npm test
+```
+*Executes automated end-to-end tests verifying database connectivity, sequential reference generation, atomic double-entry balance updates, and shortage blocking.*
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 4. Launch Development Server
+```bash
+npm run dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🔑 Pre-Seeded Demo Credentials
+
+| Role | Login ID | Email | Password |
+| :--- | :--- | :--- | :--- |
+| **Inventory Manager** | `dakshvir` | `dakshvirsharma2008@gmail.com` | `OdooHack2026!` |
+| **Warehouse Staff** | `staff_alex` | `alex@stocksense.internal` | `OdooHack2026!` |
+
+---
+
+## 🧪 Automated Test Verification
+
+StockSense includes an integrated smoke test runner (`scripts/smoke-test.ts`):
+- **Test 1**: Verifies database connection & 14 realistic seed products.
+- **Test 2**: Asserts sequential reference generation (`WH/IN/0001`).
+- **Test 3**: Asserts atomic stock increment and double-entry ledger write.
+- **Test 4**: Proves delivery shortage detection blocks dispatch and flags orders in `WAITING` state.
+
+---
+
+## 🗺️ What Works Today vs. Roadmap
+
+| Feature Area | Hackathon Status | Production Roadmap |
+| :--- | :---: | :--- |
+| **Receipts (+Stock)** | **100% Working** | Barcode scanner camera feed integration |
+| **Deliveries (-Stock)** | **100% Working** | Automated batch picking waves |
+| **Stock Adjustments** | **100% Working** | RFID portal bulk cycle count import |
+| **Move Ledger Audit** | **100% Working** | Export to signed PDF / CSV |
+| **Shortage Detection** | **100% Working** | Automated vendor purchase order trigger |
+| **Multi-Warehouse** | **100% Working** | Cross-warehouse inter-company billing |
+
+---
+
+## 🏆 Hackathon Pacing & Discipline
+
+Developed under strict 8-hour pacing guidelines with single-branch git discipline:
+- `Milestone 1`: Next.js 15, Prisma SQLite schema, stock engine, realistic seed data.
+- `Milestone 2`: Operations, Products CRUD, Stock adjustments, and Dashboard KPI APIs.
+- `Milestone 3`: Enterprise AppShell, Real-time Dashboard, Operations (List/Kanban), and Stock Table.
+- `Milestone 4`: Automated Smoke Test suite (`npm test`), 0 lint warnings, hardened shortage guards.
+- `Milestone 5`: Code freeze, documentation, and evaluator submission.
