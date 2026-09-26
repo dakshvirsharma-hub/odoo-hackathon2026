@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
 
     // Compute aggregated onHand and freeToUse across all locations
     const formatted = products.map((p) => {
-      const totalOnHand = p.stockLevels.reduce((sum, sl) => sum + sl.onHand, 0);
-      const totalReserved = p.stockLevels.reduce((sum, sl) => sum + sl.reserved, 0);
+      const totalOnHand = (p.stockLevels || []).reduce((sum: number, sl: { onHand: number }) => sum + (sl.onHand || 0), 0);
+      const totalReserved = (p.stockLevels || []).reduce((sum: number, sl: { reserved: number }) => sum + (sl.reserved || 0), 0);
       const freeToUse = Math.max(0, totalOnHand - totalReserved);
       const isLowStock = freeToUse <= p.minStock;
 

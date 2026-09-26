@@ -72,8 +72,8 @@ export async function GET(req: NextRequest) {
 
     // Format products with live free-to-use stock
     const formattedProducts = products.map((p) => {
-      const onHand = p.stockLevels.reduce((acc, sl) => acc + sl.onHand, 0);
-      const reserved = p.stockLevels.reduce((acc, sl) => acc + sl.reserved, 0);
+      const onHand = (p.stockLevels || []).reduce((acc: number, sl: { onHand: number }) => acc + (sl.onHand || 0), 0);
+      const reserved = (p.stockLevels || []).reduce((acc: number, sl: { reserved: number }) => acc + (sl.reserved || 0), 0);
       return {
         id: p.id,
         name: p.name,
