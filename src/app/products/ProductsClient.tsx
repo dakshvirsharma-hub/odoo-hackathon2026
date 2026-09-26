@@ -191,7 +191,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
                     selectedCategory === cat
-                      ? "bg-slate-900 text-white"
+                      ? "bg-indigo-600 text-white shadow-xs"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
