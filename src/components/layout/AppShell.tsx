@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Boxes,
@@ -11,6 +11,10 @@ import {
   Settings,
   Warehouse,
   Bell,
+  LogIn,
+  LogOut,
+  UserCheck,
+  ChevronUp,
 } from "lucide-react";
 
 interface AppShellProps {
@@ -19,7 +23,47 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [activeWarehouse] = useState("Main Warehouse (WH)");
+  const [user, setUser] = useState<{
+    id: string;
+    name: string;
+    loginId: string;
+    email: string;
+    role: string;
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("stocksense_user");
+        if (stored) return JSON.parse(stored);
+      } catch {
+        // Fallback
+      }
+    }
+    return {
+      id: "default-user",
+      name: "Dakshvir Sharma",
+      loginId: "dakshvir",
+      email: "dakshvirsharma2008@gmail.com",
+      role: "MANAGER",
+    };
+  });
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
+    localStorage.removeItem("stocksense_user");
+    setUser({
+      id: "default-user",
+      name: "Dakshvir Sharma",
+      loginId: "dakshvir",
+      email: "dakshvirsharma2008@gmail.com",
+      role: "MANAGER",
+    });
+    router.push("/login");
+  };
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -78,16 +122,60 @@ export default function AppShell({ children }: AppShellProps) {
         </div>
 
         {/* User Profile Footer (Wireframe Spec: Left sidebar corner labeled avatar "A"/"D") */}
-        <div className="p-3 border-t border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-bold text-sm">
-              D
+        <div className="p-3 border-t border-slate-800 relative">
+          {showUserMenu && (
+            <div className="absolute bottom-16 left-3 right-3 bg-slate-800 border border-slate-700 rounded-xl p-2 shadow-2xl text-xs space-y-1 z-50">
+              <div className="p-2 border-b border-slate-700/60 mb-1">
+                <p className="font-bold text-slate-100 truncate">{user.name}</p>
+                <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+                <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold">
+                  {user.role}
+                </span>
+              </div>
+              <Link
+                href="/login"
+                className="flex items-center gap-2 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-lg transition-colors"
+                onClick={() => setShowUserMenu(false)}
+              >
+                <LogIn className="w-3.5 h-3.5 text-indigo-400" /> Switch / Sign In
+              </Link>
+              <Link
+                href="/signup"
+                className="flex items-center gap-2 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-lg transition-colors"
+                onClick={() => setShowUserMenu(false)}
+              >
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400" /> Register Account
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-left font-medium"
+              >
+                <LogOut className="w-3.5 h-3.5" /> Sign Out
+              </button>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-200 truncate">Dakshvir Sharma</p>
-              <p className="text-[11px] text-slate-400 truncate">Inventory Manager</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="w-full flex items-center justify-between p-1.5 hover:bg-slate-800/80 rounded-lg transition-colors text-left group"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">
+                  {user.name}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {user.role === "MANAGER" ? "Inventory Manager" : "Warehouse Staff"}
+                </p>
+              </div>
             </div>
-          </div>
+            <ChevronUp className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 shrink-0" />
+          </button>
         </div>
       </aside>
 
