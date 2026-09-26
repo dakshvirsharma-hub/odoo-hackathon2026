@@ -17,16 +17,26 @@ export async function generateOperationReference(
   const code = typeCodeMap[type] || "GEN";
   const prefix = `${warehouseCode}/${code}/`;
 
-  // Count existing operations of this type
-  const count = await prisma.stockOperation.count({
+  // Fetch existing operations with this prefix to get the highest sequential number
+  const existing = await prisma.stockOperation.findMany({
     where: {
       reference: {
         startsWith: prefix,
       },
     },
+    select: { reference: true },
   });
 
-  const nextNumber = (count + 1).toString().padStart(4, "0");
+  let maxNum = 0;
+  for (const item of existing) {
+    const suffix = item.reference.slice(prefix.length);
+    const parsed = parseInt(suffix, 10);
+    if (!isNaN(parsed) && parsed > maxNum) {
+      maxNum = parsed;
+    }
+  }
+
+  const nextNumber = (maxNum + 1).toString().padStart(4, "0");
   return `${prefix}${nextNumber}`;
 }
 

@@ -3,37 +3,40 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const createProductSchema = z.object({
-  name: z.string().min(2, "Product name must be at least 2 characters"),
-  sku: z.string().min(2, "SKU is required").toUpperCase(),
-  category: z.string().default("General"),
-  uom: z.string().default("Units"),
-  perUnitCost: z.number().nonnegative("Per unit cost must be 0 or positive"),
-  minStock: z.number().nonnegative("Minimum reorder stock must be 0 or positive").default(10),
-  initialStock: z.number().nonnegative().optional().default(0),
+  name: z.string().trim().min(2, "Product name must be at least 2 characters"),
+  sku: z.string().trim().min(2, "SKU is required").toUpperCase(),
+  category: z.string().trim().default("General"),
+  uom: z.string().trim().default("Units"),
+  perUnitCost: z.coerce.number().nonnegative("Per unit cost must be 0 or positive").default(0),
+  minStock: z.coerce.number().nonnegative("Minimum reorder stock must be 0 or positive").default(10),
+  initialStock: z.coerce.number().nonnegative("Initial stock must be 0 or positive").optional().default(0),
   locationId: z.string().optional(),
 });
 
 const updateStockSchema = z.object({
   productId: z.string().min(1, "Product ID is required"),
-  locationId: z.string().min(1, "Location ID is required"),
-  newOnHand: z.number().nonnegative("Stock quantity must be 0 or greater"),
+  locationId: z.string().optional(),
+  newOnHand: z.coerce.number().nonnegative("Stock quantity must be 0 or greater"),
   reason: z.string().optional().default("Manual Stock Adjustment via Dashboard"),
 });
 
 // GET /api/products - List products with real-time aggregated stock and reorder flags
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
+    const searchParams = req.nextUrl.searchParams;
     const search = searchParams.get("search");
     const category = searchParams.get("category");
     const lowStockOnly = searchParams.get("lowStock") === "true";
 
     const where: Prisma.ProductWhereInput = {};
     if (search && search.trim() !== "") {
+      const query = search.trim();
       where.OR = [
-        { name: { contains: search } },
-        { sku: { contains: search } },
+        { name: { contains: query } },
+        { sku: { contains: query } },
       ];
     }
     if (category && category !== "ALL") {
@@ -54,8 +57,9 @@ export async function GET(req: NextRequest) {
 
     // Compute aggregated onHand and freeToUse across all locations
     const formatted = products.map((p) => {
-      const totalOnHand = (p.stockLevels || []).reduce((sum: number, sl: { onHand: number }) => sum + (sl.onHand || 0), 0);
-      const totalReserved = (p.stockLevels || []).reduce((sum: number, sl: { reserved: number }) => sum + (sl.reserved || 0), 0);
+      const stockList = p.stockLevels || [];
+      const totalOnHand = stockList.reduce((sum: number, sl: { onHand: number }) => sum + (sl.onHand || 0), 0);
+      const totalReserved = stockList.reduce((sum: number, sl: { reserved: number }) => sum + (sl.reserved || 0), 0);
       const freeToUse = Math.max(0, totalOnHand - totalReserved);
       const isLowStock = freeToUse <= p.minStock;
 
@@ -71,13 +75,13 @@ export async function GET(req: NextRequest) {
         reserved: totalReserved,
         freeToUse,
         isLowStock,
-        stockLevels: p.stockLevels.map((sl) => ({
+        stockLevels: stockList.map((sl) => ({
           locationId: sl.locationId,
-          locationName: sl.location.name,
-          locationCode: sl.location.shortCode,
-          onHand: sl.onHand,
-          reserved: sl.reserved,
-          freeToUse: Math.max(0, sl.onHand - sl.reserved),
+          locationName: sl.location?.name || "Internal Stock",
+          locationCode: sl.location?.shortCode || "STOCK",
+          onHand: sl.onHand || 0,
+          reserved: sl.reserved || 0,
+          freeToUse: Math.max(0, (sl.onHand || 0) - (sl.reserved || 0)),
         })),
         createdAt: p.createdAt,
       };
@@ -112,7 +116,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const product = await prisma.$transaction(async (tx) => {
+    const product = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newProduct = await tx.product.create({
         data: {
           name: validated.name,
@@ -124,32 +128,37 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // If initial stock is provided, create stock level at specified or default internal location
-      if (validated.initialStock > 0) {
-        let locId = validated.locationId;
-        if (!locId) {
-          const defaultLoc = await tx.location.findFirst({
-            where: { type: "INTERNAL" },
-          });
-          locId = defaultLoc?.id;
-        }
+      // Always create a stock level for the product at the specified or default internal location
+      let locId = validated.locationId;
+      if (!locId) {
+        const defaultLoc = await tx.location.findFirst({
+          where: { type: "INTERNAL" },
+        });
+        locId = defaultLoc?.id;
+      }
 
-        if (locId) {
-          await tx.stockLevel.create({
-            data: {
-              productId: newProduct.id,
-              locationId: locId,
-              onHand: validated.initialStock,
-              reserved: 0,
-            },
-          });
+      if (locId) {
+        await tx.stockLevel.create({
+          data: {
+            productId: newProduct.id,
+            locationId: locId,
+            onHand: validated.initialStock || 0,
+            reserved: 0,
+          },
+        });
 
-          // Log opening balance move in ledger
+        // If initial stock is positive, record opening balance in double-entry move ledger
+        if (validated.initialStock && validated.initialStock > 0) {
+          const vendorLoc = await tx.location.findFirst({
+            where: { type: "VENDOR" },
+          });
+          const fromLocId = vendorLoc?.id || locId;
+
           await tx.stockMoveLedger.create({
             data: {
               reference: "OPENING-STOCK",
               productId: newProduct.id,
-              fromLocationId: locId,
+              fromLocationId: fromLocId,
               toLocationId: locId,
               quantity: validated.initialStock,
               moveType: "IN",
@@ -160,7 +169,17 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return newProduct;
+      // Return product with populated stockLevels
+      return await tx.product.findUnique({
+        where: { id: newProduct.id },
+        include: {
+          stockLevels: {
+            include: {
+              location: true,
+            },
+          },
+        },
+      });
     });
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });
@@ -186,12 +205,30 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const validated = updateStockSchema.parse(body);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Resolve target location: explicit or existing stock level or default internal location
+      let locId = validated.locationId;
+      if (!locId) {
+        const existingLevel = await tx.stockLevel.findFirst({
+          where: { productId: validated.productId },
+        });
+        locId = existingLevel?.locationId;
+      }
+      if (!locId) {
+        const defaultLoc = await tx.location.findFirst({
+          where: { type: "INTERNAL" },
+        });
+        locId = defaultLoc?.id;
+      }
+      if (!locId) {
+        throw new Error("No storage location found for stock adjustment");
+      }
+
       const current = await tx.stockLevel.findUnique({
         where: {
           productId_locationId: {
             productId: validated.productId,
-            locationId: validated.locationId,
+            locationId: locId,
           },
         },
       });
@@ -203,7 +240,7 @@ export async function PATCH(req: NextRequest) {
         where: {
           productId_locationId: {
             productId: validated.productId,
-            locationId: validated.locationId,
+            locationId: locId,
           },
         },
         update: {
@@ -211,7 +248,7 @@ export async function PATCH(req: NextRequest) {
         },
         create: {
           productId: validated.productId,
-          locationId: validated.locationId,
+          locationId: locId,
           onHand: validated.newOnHand,
           reserved: 0,
         },
@@ -221,21 +258,23 @@ export async function PATCH(req: NextRequest) {
       const lossLoc = await tx.location.findFirst({
         where: { type: "INVENTORY_LOSS" },
       });
-      const lossLocId = lossLoc?.id || validated.locationId;
+      const lossLocId = lossLoc?.id || locId;
 
-      // Log adjustment in ledger
-      await tx.stockMoveLedger.create({
-        data: {
-          reference: `ADJ-${Date.now().toString().slice(-4)}`,
-          productId: validated.productId,
-          fromLocationId: difference >= 0 ? lossLocId : validated.locationId,
-          toLocationId: difference >= 0 ? validated.locationId : lossLocId,
-          quantity: Math.abs(difference),
-          moveType: "ADJUSTMENT",
-          status: "DONE",
-          notes: `${validated.reason} (Delta: ${difference > 0 ? "+" : ""}${difference})`,
-        },
-      });
+      // Log adjustment in ledger only when quantity delta is non-zero
+      if (difference !== 0) {
+        await tx.stockMoveLedger.create({
+          data: {
+            reference: `ADJ-${Date.now().toString().slice(-4)}`,
+            productId: validated.productId,
+            fromLocationId: difference > 0 ? lossLocId : locId,
+            toLocationId: difference > 0 ? locId : lossLocId,
+            quantity: Math.abs(difference),
+            moveType: "ADJUSTMENT",
+            status: "DONE",
+            notes: `${validated.reason} (Delta: ${difference > 0 ? "+" : ""}${difference})`,
+          },
+        });
+      }
 
       return updatedLevel;
     });
@@ -260,3 +299,4 @@ export async function PATCH(req: NextRequest) {
     );
   }
 }
+
