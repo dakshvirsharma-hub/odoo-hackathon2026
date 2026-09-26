@@ -2,7 +2,8 @@
 > **Odoo x LPU Jalandhar Hackathon 2026 Submission**  
 > **Team Lead**: Dakshvir Sharma (`dakshvirsharma-hub`)  
 > **Evaluator Collaborator**: K Theja (`kthe-odoo`, `kthe@odoo.com`)  
-> **Repository**: [https://github.com/dakshvirsharma-hub/odoo-hackathon2026](https://github.com/dakshvirsharma-hub/odoo-hackathon2026)
+> **Repository**: [https://github.com/dakshvirsharma-hub/odoo-hackathon2026](https://github.com/dakshvirsharma-hub/odoo-hackathon2026)  
+> **Live Production Demo**: [https://odoo-hackathonbydaksh.vercel.app](https://odoo-hackathonbydaksh.vercel.app)
 
 ---
 
