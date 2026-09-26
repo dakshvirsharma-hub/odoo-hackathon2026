@@ -35,49 +35,84 @@ export async function generateOperationReference(
  * Updates cached StockLevel and appends to StockMoveLedger audit trail.
  */
 export async function validateStockOperation(operationId: string) {
-  return await prisma.$transaction(async (tx) => {
-    const op = await tx.stockOperation.findUnique({
-      where: { id: operationId },
-      include: {
-        lines: {
-          include: { product: true },
-        },
+  const op = await prisma.stockOperation.findUnique({
+    where: { id: operationId },
+    include: {
+      lines: {
+        include: { product: true },
       },
-    });
+    },
+  });
 
-    if (!op) {
-      throw new Error("Stock operation not found");
+  if (!op) {
+    throw new Error("Stock operation not found");
+  }
+
+  if (op.status === "DONE") {
+    throw new Error("Operation has already been validated and marked as DONE");
+  }
+
+  // Default locations if not explicitly attached
+  let srcLocId = op.sourceLocationId;
+  let dstLocId = op.destLocationId;
+
+  if (!srcLocId || !dstLocId) {
+    const defaultInternal = await prisma.location.findFirst({ where: { type: "INTERNAL" } });
+    const defaultVendor = await prisma.location.findFirst({ where: { type: "VENDOR" } });
+    const defaultCustomer = await prisma.location.findFirst({ where: { type: "CUSTOMER" } });
+    const defaultLoss = await prisma.location.findFirst({ where: { type: "INVENTORY_LOSS" } });
+
+    if (op.type === "RECEIPT") {
+      srcLocId = srcLocId || defaultVendor?.id || "";
+      dstLocId = dstLocId || defaultInternal?.id || "";
+    } else if (op.type === "DELIVERY") {
+      srcLocId = srcLocId || defaultInternal?.id || "";
+      dstLocId = dstLocId || defaultCustomer?.id || "";
+    } else if (op.type === "ADJUSTMENT") {
+      srcLocId = srcLocId || defaultInternal?.id || "";
+      dstLocId = dstLocId || defaultLoss?.id || "";
+    } else {
+      srcLocId = srcLocId || defaultInternal?.id || "";
+      dstLocId = dstLocId || defaultInternal?.id || "";
     }
+  }
 
-    if (op.status === "DONE") {
-      throw new Error("Operation has already been validated and marked as DONE");
-    }
+  // Pre-check for Delivery availability to persist WAITING status and line alert flags
+  if (op.type === "DELIVERY") {
+    let hasShortage = false;
+    let shortageMessage = "";
 
-    // Default locations if not explicitly attached
-    let srcLocId = op.sourceLocationId;
-    let dstLocId = op.destLocationId;
+    for (const line of op.lines) {
+      const sourceStock = await prisma.stockLevel.findUnique({
+        where: {
+          productId_locationId: {
+            productId: line.productId,
+            locationId: srcLocId,
+          },
+        },
+      });
 
-    if (!srcLocId || !dstLocId) {
-      const defaultInternal = await tx.location.findFirst({ where: { type: "INTERNAL" } });
-      const defaultVendor = await tx.location.findFirst({ where: { type: "VENDOR" } });
-      const defaultCustomer = await tx.location.findFirst({ where: { type: "CUSTOMER" } });
-      const defaultLoss = await tx.location.findFirst({ where: { type: "INVENTORY_LOSS" } });
-
-      if (op.type === "RECEIPT") {
-        srcLocId = srcLocId || defaultVendor?.id || "";
-        dstLocId = dstLocId || defaultInternal?.id || "";
-      } else if (op.type === "DELIVERY") {
-        srcLocId = srcLocId || defaultInternal?.id || "";
-        dstLocId = dstLocId || defaultCustomer?.id || "";
-      } else if (op.type === "ADJUSTMENT") {
-        srcLocId = srcLocId || defaultInternal?.id || "";
-        dstLocId = dstLocId || defaultLoss?.id || "";
-      } else {
-        srcLocId = srcLocId || defaultInternal?.id || "";
-        dstLocId = dstLocId || defaultInternal?.id || "";
+      const available = (sourceStock?.onHand || 0) - (sourceStock?.reserved || 0);
+      if (available < line.qtyDemanded) {
+        hasShortage = true;
+        shortageMessage = `Insufficient stock for "${line.product.name}" (${line.product.sku}). Available: ${available}, Demanded: ${line.qtyDemanded}`;
+        await prisma.stockOperationLine.update({
+          where: { id: line.id },
+          data: { isOutOfStock: true },
+        });
       }
     }
 
+    if (hasShortage) {
+      await prisma.stockOperation.update({
+        where: { id: op.id },
+        data: { status: "WAITING" },
+      });
+      throw new Error(shortageMessage);
+    }
+  }
+
+  return await prisma.$transaction(async (tx) => {
     // Process each line item
     for (const line of op.lines) {
       const qty = line.qtyDemanded;
@@ -103,33 +138,8 @@ export async function validateStockOperation(operationId: string) {
         });
       }
 
-      // 2. If Delivery: Check availability & deduct from source location
+      // 2. If Delivery: Deduct from source location
       if (op.type === "DELIVERY") {
-        const sourceStock = await tx.stockLevel.findUnique({
-          where: {
-            productId_locationId: {
-              productId: line.productId,
-              locationId: srcLocId,
-            },
-          },
-        });
-
-        const available = (sourceStock?.onHand || 0) - (sourceStock?.reserved || 0);
-        if (available < qty) {
-          // Wireframe spec: mark line out of stock and set operation to WAITING
-          await tx.stockOperationLine.update({
-            where: { id: line.id },
-            data: { isOutOfStock: true },
-          });
-          await tx.stockOperation.update({
-            where: { id: op.id },
-            data: { status: "WAITING" },
-          });
-          throw new Error(
-            `Insufficient stock for "${line.product.name}" (${line.product.sku}). Available: ${available}, Demanded: ${qty}`
-          );
-        }
-
         await tx.stockLevel.update({
           where: {
             productId_locationId: {
@@ -182,7 +192,7 @@ export async function validateStockOperation(operationId: string) {
         data: { qtyDone: qty, isOutOfStock: false },
       });
 
-      // 5. Append to StockMoveLedger (Wireframe rule: In moves = IN, Out moves = OUT)
+      // 5. Append to StockMoveLedger
       const moveType =
         op.type === "RECEIPT"
           ? "IN"
