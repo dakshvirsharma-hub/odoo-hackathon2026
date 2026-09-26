@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const createProductSchema = z.object({
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const lowStockOnly = searchParams.get("lowStock") === "true";
 
-    const where: any = {};
+    const where: Prisma.ProductWhereInput = {};
     if (search && search.trim() !== "") {
       where.OR = [
         { name: { contains: search } },
@@ -85,10 +86,11 @@ export async function GET(req: NextRequest) {
     const results = lowStockOnly ? formatted.filter((p) => p.isLowStock) : formatted;
 
     return NextResponse.json({ success: true, count: results.length, data: results });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching products:", error);
+    const message = error instanceof Error ? error.message : "Failed to fetch products";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch products", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -162,7 +164,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating product:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -170,8 +172,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const message = error instanceof Error ? error.message : "Failed to create product";
     return NextResponse.json(
-      { success: false, error: "Failed to create product", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -242,7 +245,7 @@ export async function PATCH(req: NextRequest) {
       message: "Stock level updated successfully",
       data: result,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error updating stock:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -250,8 +253,9 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
+    const message = error instanceof Error ? error.message : "Failed to update stock";
     return NextResponse.json(
-      { success: false, error: "Failed to update stock", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }

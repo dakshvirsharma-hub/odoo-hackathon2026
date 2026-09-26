@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 // GET /api/ledger - Immutable audit trail of all inventory movements
 export async function GET(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
     const locationId = searchParams.get("locationId");
     const productId = searchParams.get("productId");
 
-    const where: any = {};
+    const where: Prisma.StockMoveLedgerWhereInput = {};
 
     if (moveType && moveType !== "ALL") {
       where.moveType = moveType;
@@ -94,10 +95,11 @@ export async function GET(req: NextRequest) {
       },
       data: moves,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching move ledger:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch move ledger", details: error.message },
+      { success: false, error: "Failed to fetch move ledger", details: message },
       { status: 500 }
     );
   }

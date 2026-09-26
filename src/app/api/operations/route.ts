@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateOperationReference } from "@/lib/stock-engine";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const createOperationSchema = z.object({
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const search = searchParams.get("search");
 
-    const where: any = {};
+    const where: Prisma.StockOperationWhereInput = {};
 
     if (type && type !== "ALL") {
       where.type = type;
@@ -61,10 +62,11 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, count: operations.length, data: operations });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching operations:", error);
+    const message = error instanceof Error ? error.message : "Failed to fetch operations";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch operations", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -140,7 +142,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: newOperation }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating operation:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -148,8 +150,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const message = error instanceof Error ? error.message : "Failed to create operation";
     return NextResponse.json(
-      { success: false, error: "Failed to create operation", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }

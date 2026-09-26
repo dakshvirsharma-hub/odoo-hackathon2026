@@ -11,9 +11,6 @@ import {
   Settings,
   Warehouse,
   Bell,
-  Search,
-  UserCheck,
-  ChevronDown,
 } from "lucide-react";
 
 interface AppShellProps {
@@ -22,7 +19,7 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const [activeWarehouse, setActiveWarehouse] = useState("Main Warehouse (WH)");
+  const [activeWarehouse] = useState("Main Warehouse (WH)");
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutDashboard },

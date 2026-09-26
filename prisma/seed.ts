@@ -57,7 +57,7 @@ async function main() {
     },
   });
 
-  console.log("🏭 Seeded 2 Warehouses");
+  console.log(`🏭 Seeded 2 Warehouses: ${mainWH.name}, ${secondaryWH.name}`);
 
   // 3. Seed Locations (Internal, Vendors, Customers, Virtual)
   const locStock1 = await prisma.location.create({
@@ -77,6 +77,8 @@ async function main() {
       warehouseId: mainWH.id,
     },
   });
+
+  console.log(`📦 Seeded warehouse bins: ${locStock1.shortCode}, ${locStock2.shortCode}`);
 
   const locProduction = await prisma.location.create({
     data: {
@@ -131,7 +133,7 @@ async function main() {
     { name: "Double Wall Corrugated Box", sku: "PKG001", category: "Packaging", uom: "Units", perUnitCost: 45, minStock: 100, onHand: 500, reserved: 50 },
   ];
 
-  const products: Record<string, any> = {};
+  const products: Record<string, { id: string }> = {};
 
   for (const item of productData) {
     const product = await prisma.product.create({

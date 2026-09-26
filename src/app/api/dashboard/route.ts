@@ -147,10 +147,11 @@ export async function GET() {
         recentMoves,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error computing dashboard metrics:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to load dashboard metrics", details: error.message },
+      { success: false, error: "Failed to load dashboard metrics", details: message },
       { status: 500 }
     );
   }

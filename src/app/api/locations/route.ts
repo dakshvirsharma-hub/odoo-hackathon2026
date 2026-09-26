@@ -47,10 +47,11 @@ export async function GET(req: NextRequest) {
         locations,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching locations:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch locations", details: error.message },
+      { success: false, error: "Failed to fetch locations", details: message },
       { status: 500 }
     );
   }
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: location }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating location/warehouse:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -106,8 +107,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const message = error instanceof Error ? error.message : "Failed to create location";
     return NextResponse.json(
-      { success: false, error: "Failed to create location", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }

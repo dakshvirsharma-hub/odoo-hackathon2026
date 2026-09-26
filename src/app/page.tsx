@@ -10,7 +10,6 @@ import {
   ArrowUpRight,
   ArrowLeftRight,
   TrendingUp,
-  Clock,
   CheckCircle2,
   AlertCircle,
   ExternalLink,
@@ -70,15 +69,40 @@ export default function DashboardPage() {
         throw new Error(json.error || "Failed to load dashboard metrics");
       }
       setData(json.data);
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    let ignore = false;
+    async function loadData() {
+      try {
+        const res = await fetch("/api/dashboard");
+        const json = await res.json();
+        if (!ignore) {
+          if (!res.ok || !json.success) {
+            throw new Error(json.error || "Failed to load dashboard metrics");
+          }
+          setData(json.data);
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : "An error occurred");
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+    loadData();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   return (

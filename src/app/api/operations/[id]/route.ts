@@ -39,10 +39,11 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: operation });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching operation detail:", error);
+    const message = error instanceof Error ? error.message : "Failed to fetch operation";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch operation", details: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -125,7 +126,7 @@ export async function PATCH(
     }
 
     return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error updating operation:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -133,8 +134,9 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    const message = error instanceof Error ? error.message : "Failed to update operation";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update operation" },
+      { success: false, error: message },
       { status: 400 }
     );
   }
