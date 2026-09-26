@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/dashboard - Real-time KPIs and operational metrics
 export async function GET() {
   try {
@@ -18,8 +20,8 @@ export async function GET() {
     let totalInventoryValue = 0;
 
     for (const p of products) {
-      const onHand = p.stockLevels.reduce((acc, sl) => acc + sl.onHand, 0);
-      const reserved = p.stockLevels.reduce((acc, sl) => acc + sl.reserved, 0);
+      const onHand = (p.stockLevels || []).reduce((acc: number, sl: { onHand: number }) => acc + (sl.onHand || 0), 0);
+      const reserved = (p.stockLevels || []).reduce((acc: number, sl: { reserved: number }) => acc + (sl.reserved || 0), 0);
       const freeToUse = Math.max(0, onHand - reserved);
 
       if (freeToUse <= 0) {
